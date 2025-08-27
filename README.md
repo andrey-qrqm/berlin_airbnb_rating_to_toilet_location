@@ -1,4 +1,4 @@
-# Project Title: Effect of public toilets onto nearby Airbnb ratings in Berlin
+# Effect of public toilets onto nearby Airbnb ratings in Berlin
 
 ## Description:
 Visualization of corelation between the public toilet locations and the Airbnb Ratings in Berlin. Javascript + Leafjs
