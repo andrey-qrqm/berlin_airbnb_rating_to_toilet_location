@@ -15,14 +15,23 @@ Visualization of corelation between the public toilet locations and the Airbnb R
 
 ## Project Structure:
 ./
+
     - README.md
+
     - index.html
+
     - map_buffer.html
+
     - data/
+
         - Airbnb_Berlin.csv
+
         - berliner-toileten-standorte.csv
+
     - img/
+
         - pin.img
+        
 
 ## Launch Project:
 1) Set up the local server in the convinient way for you:
