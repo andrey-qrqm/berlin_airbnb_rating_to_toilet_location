@@ -1,0 +1,2 @@
+# ignore large data files
+data/*.csv  data/Airbnb_Berlin.csv
