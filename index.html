@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+
+<!--Andrei Madiarov-->
+
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Map</title>
+
+
+    <!-- Leaflet css-->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+
+    <!-- Make sure you put this AFTER Leaflet's CSS -->
+    <!-- Leaflet js-->
+    <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin="">
+    </script>
+
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
+    integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06R5v6NSk3ZUfsH6FNEDepLx9hPQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- Marker Clusters -->
+     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <!--Heat map-->
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+
+    <style>
+        body, html{
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+    </style>
+</head>
+
+<body>     
+    <div id="map"></div>
+    <script text="type/javascript">
+
+        //INITIALIZE THE MAP
+
+        var map = L.map('map').setView([52.5, 13.4], 12);
+        
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        //<a href="https://www.flaticon.com/free-icons/marker" title="marker icons">Marker icons created by turkkub - Flaticon</a>
+        var MarkerIcon = L.icon({
+            iconUrl: 'img/pin.png',
+            iconSize: [40, 40], // width, height
+            iconAnchor: [20, 40], // where the point of the icon hits the map
+            popupAnchor: [0, -35]
+        });
+
+
+        //Link to Buffer map
+        var bufferButton = L.control({position: 'topleft'});
+        bufferButton.onAdd = function(map) {
+            var div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+            div.innerHTML = `
+                <a href="map_buffer.html" target="_self"
+                style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 90px;
+                    height: 30px;
+                    background: white;
+                    text-decoration: none;
+                    font-family: sans-serif;
+                    font-size: 14px;
+                    color: black;
+                    text-align: center;
+                ">
+                Buffer 
+                </a>`;
+            return div;
+        };
+        bufferButton.addTo(map);
+
+        // Legend
+        var legend = L.control({ position: "bottomright" });
+
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create("div", "info legend");
+            div.style.background = "white";
+            div.style.padding = "10px";
+            div.style.borderRadius = "6px";
+            div.style.fontFamily = "sans-serif";
+            div.style.fontSize = "12px";
+            div.style.boxShadow = "0 0 6px rgba(0,0,0,0.3)";
+            div.style.lineHeight = "18px";
+            div.innerHTML = `
+                <div style="text-align:center; margin-bottom:6px;"><b>Legend</b></div>
+                
+                <div><b>Airbnb Rating</b></div>
+                <div style="width:140px; height:12px; background: linear-gradient(to right, blue, cyan, lime, yellow, red); margin:4px 0;"></div>
+                <div style="display:flex; justify-content:space-between; font-size:11px;">
+                    <span>0</span>
+                    <span>50</span>
+                    <span>100</span>
+                </div>
+
+                <hr style="margin:8px 0;">
+
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <img src="img/pin.png" style="width:20px; height:20px;">
+                    <span>Toilet location</span>
+                </div>
+            `;
+            return div;
+        };
+
+        legend.addTo(map);
+
+        //Load Toilets Data
+        fetch("data/berliner-toiletten-standorte.csv")
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(csvData) {
+            const parsed = Papa.parse(csvData, {
+                header: true,
+                skipEmptyLines: true
+            });
+            console.log(parsed.data);
+
+            var layerToilets = L.markerClusterGroup();
+            parsed.data.forEach(data => {
+                let lat = parseFloat(data["Latitude"]);
+                let long = parseFloat(data["Longitude"]);
+                var marker_toilet = L.marker([lat, long], { icon: MarkerIcon }).bindPopup(`
+                    Toilet ${lat}, ${long}
+                    `);
+                layerToilets.addLayer(marker_toilet); 
+            });
+
+            map.addLayer(layerToilets);
+        })
+        .catch(function(error) {
+            console.error("Error fetching CSV:", error);
+        });
+
+
+        fetch("data/Airbnb_Berlin.csv")
+        .then(response => response.text())
+        .then(csvData => {
+            const parsed = Papa.parse(csvData, {
+                header: true,
+                skipEmptyLines: true
+            });
+
+            // Object to collect ratings by location
+            const locationMap = {};
+
+            parsed.data.forEach(data => {
+                let lat = parseFloat(data["Latitude"]);
+                let long = parseFloat(data["Longitude"]);
+                let rating = parseFloat(data["Overall Rating"]);
+                let is_exact = data["Is Exact Location"];
+
+                if (is_exact === 't' && !isNaN(lat) && !isNaN(long)) {
+                    let key = `${lat},${long}`;
+                    if (!locationMap[key]) {
+                        locationMap[key] = { sum: 0, count: 0 };
+                    }
+                    if (!isNaN(rating)) {
+                        locationMap[key].sum += rating;
+                        locationMap[key].count += 1;
+                    }
+                }
+            });
+
+            // Compute average rating per unique location
+            const averagedPoints = [];
+            for (let key in locationMap) {
+                const [lat, long] = key.split(",").map(Number);
+                const avgRating = locationMap[key].count > 0 
+                    ? locationMap[key].sum / locationMap[key].count 
+                    : null;
+
+                if (avgRating !== null) {
+                    let intensity = avgRating / 100; // normalize for heatmap
+                    averagedPoints.push([lat, long, intensity]);
+                }
+            }
+
+            console.log("Averaged Airbnb points:", averagedPoints);
+
+            const heatLayer = L.heatLayer(averagedPoints, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 17,
+            });
+
+            map.addLayer(heatLayer);
+        })
+        .catch(error => {
+            console.error("Error fetching Airbnb CSV:", error);
+        });
+
+    </script>
+</body>
+</html>
