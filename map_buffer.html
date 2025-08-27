@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Map Buffer Approach</title>
+
+    <!-- Leaflet css-->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""/>
+
+    <!-- Leaflet js-->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""></script>
+
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+    </style>
+</head>
+
+<body>     
+    <div id="map"></div>
+    <script type="text/javascript">
+        var map = L.map('map').setView([52.5, 13.4], 12);
+
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let toilets = [];
+        let airbnbs = [];
+        let farAvgRating = null; 
+        let toilets_green = 0;
+        let toilets_red = 0;
+        let toilets_gray = 0;
+
+        function getColor(rating) {
+            if (rating === null) return "#999"; // gray if no Airbnbs nearby
+            if (farAvgRating === null) return "#999"; // fallback until calculated
+            return rating >= farAvgRating ? "#0a0" : "#a00"; 
+        }
+
+        // Link to heatmap
+        var heatmapButton = L.control({position: 'topleft'});
+        heatmapButton.onAdd = function(map) {
+            var div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+            div.innerHTML = `
+                <a href="index.html" target="_self"
+                style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 90px;
+                    height: 30px;
+                    background: white;
+                    text-decoration: none;
+                    font-family: sans-serif;
+                    font-size: 14px;
+                    color: black;
+                    text-align: center;
+                ">
+                Heat map
+                </a>`;
+            return div;
+        };
+        heatmapButton.addTo(map);
+
+        //Legend
+        var legend = L.control({ position: "bottomright" });
+
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create("div", "info legend");
+            div.style.background = "white";
+            div.style.padding = "10px";
+            div.style.borderRadius = "6px";
+            div.style.fontFamily = "sans-serif";
+            div.style.fontSize = "12px";
+            div.style.boxShadow = "0 0 6px rgba(0,0,0,0.3)";
+            div.style.lineHeight = "18px";
+
+            div.innerHTML = `
+                <div style="text-align:center; margin-bottom:6px;"><b>Legend</b></div>
+                <div style="margin-bottom:6px;">Far avg rating: <b>${farAvgRating ? farAvgRating.toFixed(1) : "N/A"}</b></div>
+                
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                    <span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:#0a0;"></span>
+                    <span>Toilets ≥ FAR (${toilets_green})</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                    <span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:#a00;"></span>
+                    <span>Toilets &lt; FAR (${toilets_red})</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:#999;"></span>
+                    <span>No Airbnb nearby (${toilets_gray})</span>
+                </div>
+            `;
+            return div;
+        };
+
+        //Load Airbnb data
+        fetch("data/Airbnb_Berlin.csv")
+        .then(res => res.text())
+        .then(csv => {
+            const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+
+            const locationMap = {};
+            parsed.data.forEach(row => {
+                let lat = parseFloat(row["Latitude"]);
+                let lon = parseFloat(row["Longitude"]);
+                let rating = parseFloat(row["Overall Rating"]);
+                let is_exact = row["Is Exact Location"];
+
+                if (is_exact === 't' && !isNaN(lat) && !isNaN(lon)) {
+                    let key = `${lat},${lon}`;
+                    if (!locationMap[key]) locationMap[key] = { sum: 0, count: 0 };
+                    if (!isNaN(rating)) {
+                        locationMap[key].sum += rating;
+                        locationMap[key].count += 1;
+                    }
+                }
+            });
+
+            for (let key in locationMap) {
+                const [lat, lon] = key.split(",").map(Number);
+                const avg = locationMap[key].sum / locationMap[key].count;
+                airbnbs.push({ lat, lon, rating: avg, nearToilet: false });
+            }
+
+            loadToilets();
+        });
+        
+        // Load Toilets Data
+        function loadToilets() {
+            fetch("data/berliner-toiletten-standorte.csv")
+            .then(res => res.text())
+            .then(csv => {
+                const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+
+                parsed.data.forEach(row => {
+                    let lat = parseFloat(row["Latitude"]);
+                    let lon = parseFloat(row["Longitude"]);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        toilets.push({ lat, lon });
+                    }
+                });
+
+                // farAvgRating
+                markNearbyAirbnbs();
+                farAvgRating = calculateFarAirbnbAverage();
+                console.log("Far avg rating:", farAvgRating);
+
+                // drawBuffers
+                drawBuffers();
+
+                console.log("Green areas:", toilets_green, "Red areas: ", toilets_red, " None: ", toilets_gray);
+            });
+        }
+
+        // mark Airbnbs within 250m of toilets
+        function markNearbyAirbnbs() {
+            toilets.forEach(toilet => {
+                airbnbs.forEach(a => {
+                    if (map.distance([toilet.lat, toilet.lon], [a.lat, a.lon]) <= 250) {
+                        a.nearToilet = true;
+                    }
+                });
+            });
+        }
+
+        function drawBuffers() {
+            toilets.forEach(toilet => {
+                // Filter nearby Airbnbs
+                let nearby = airbnbs.filter(a =>
+                    map.distance([toilet.lat, toilet.lon], [a.lat, a.lon]) <= 250
+                );
+
+                let avgRating = null;
+                if (nearby.length > 0) {
+                    let validRatings = nearby.map(a => a.rating).filter(r => !isNaN(r));
+                    if (validRatings.length > 0) {
+                        let sum = validRatings.reduce((s, r) => s + r, 0);
+                        avgRating = sum / validRatings.length;
+                    }
+                }
+                
+                if (!isNaN(avgRating) && avgRating >= farAvgRating){
+                    toilets_green += 1;
+                } 
+
+                if (!isNaN(avgRating) && avgRating < farAvgRating){
+                    toilets_red += 1;
+                } 
+
+                if (isNaN(avgRating) || avgRating == null){
+                    toilets_gray += 1;
+                }
+
+                L.circle([toilet.lat, toilet.lon], {
+                    radius: 250,
+                    color: getColor(avgRating),
+                    fillColor: getColor(avgRating),
+                    fillOpacity: 0.5,
+                    weight: 1
+                }).bindPopup(
+                    avgRating === null
+                        ? "No Airbnb nearby"
+                        : `Avg Airbnb rating nearby: ${avgRating.toFixed(1)}`
+                ).addTo(map);
+            });
+            legend.addTo(map);
+        }
+
+        function calculateFarAirbnbAverage() {
+            let farRatings = airbnbs
+                .filter(a => !a.nearToilet && !isNaN(a.rating))
+                .map(a => a.rating);
+
+            if (farRatings.length === 0) return null;
+            let sum = farRatings.reduce((s, r) => s + r, 0);
+            return sum / farRatings.length;
+        }   
+    </script>
+
+</body>
+</html>
