@@ -5,7 +5,7 @@ Visualization of corelation between the public toilet locations and the Airbnb R
 
 ## Setup instructions:
 1) Download all the files and folders to the device.
-2) Download the datasets in the .csv format:
+2) If downloading from Github: download the datasets in the .csv format:
 * Public toilets location: https://www.kaggle.com/datasets/ryanjt/berlin-public-toilets-location
 * Airbnb ratings: https://www.kaggle.com/datasets/thedevastator/berlin-airbnb-ratings-how-hosts-measure-up?resource=download
 3) Set the datasets in the ./data folder
