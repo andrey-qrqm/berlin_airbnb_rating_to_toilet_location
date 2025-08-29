@@ -36,7 +36,7 @@ Visualization of corelation between the public toilet locations and the Airbnb R
 ## Launch Project:
 1) Set up the local server in the convinient way for you:
     For example:
-    py http.server -m 8008 (or choose other port)
+    py -m http.server 8008 (or choose other port)
 2) Open the modern browser and go to localhost:8008
 
 ## How to use:
